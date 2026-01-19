@@ -58,8 +58,51 @@ def display_product(result):
     logger = logging.getLogger(ct.LOGGER_NAME)
 
     # LLMレスポンスのテキストを辞書に変換
-    product_lines = result[0].page_content.split("\n")
-    product = {item.split(": ")[0]: item.split(": ")[1] for item in product_lines}
+    try:
+        # resultがDocumentオブジェクトのリストの場合
+        if hasattr(result[0], 'page_content'):
+            content = result[0].page_content
+        else:
+            # resultが文字列のリストの場合
+            content = result[0] if isinstance(result[0], str) else str(result[0])
+        
+        # BOM（Byte Order Mark）を除去
+        if content.startswith('\ufeff'):
+            content = content[1:]
+        
+        product_lines = content.split("\n")
+        product = {}
+        
+        for item in product_lines:
+            item = item.strip()
+            # 空行をスキップ
+            if not item:
+                continue
+            # ": "で分割できるかチェック
+            if ": " in item:
+                parts = item.split(": ", 1)  # 最大1回だけ分割（値に": "が含まれる場合に対応）
+                if len(parts) == 2:
+                    key = parts[0].strip()
+                    # キーからBOMやその他の不可視文字を除去
+                    key = key.lstrip('\ufeff').strip()
+                    value = parts[1].strip()
+                    product[key] = value
+        
+        # デバッグ用ログ
+        logger.debug(f"Parsed product: {product}")
+        
+        # 必要なキーが存在するかチェック
+        required_keys = ['name', 'id', 'price', 'category', 'maker', 'score', 'review_number', 'file_name', 'description', 'recommended_people', 'stock_status']
+        missing_keys = [key for key in required_keys if key not in product]
+        if missing_keys:
+            logger.error(f"Missing required keys: {missing_keys}")
+            logger.error(f"Product content: {content}")
+            raise KeyError(f"Missing required keys: {missing_keys}")
+            
+    except (IndexError, AttributeError, KeyError) as e:
+        logger.error(f"Error parsing product data: {e}")
+        logger.error(f"Result type: {type(result)}, Result content: {result}")
+        raise
 
     st.markdown("以下の商品をご提案いたします。")
 
@@ -69,6 +112,12 @@ def display_product(result):
             価格：{product['price']}
     """)
 
+    # 提出課題 【手順２】
+    if product['stock_status'] == ct.STOCK_STATUS_WARNING:
+        st.warning(f"⚠️ {ct.STOCK_STATUS_WARNING_MESSAGE}")
+    elif product['stock_status'] == ct.STOCK_STATUS_OUT_OF_STOCK:
+        st.error(f"❗️ {ct.STOCK_STATUS_OUT_OF_STOCK_MESSAGE}")
+    
     # 「商品カテゴリ」と「メーカー」と「ユーザー評価」
     st.code(f"""
         商品カテゴリ：{product['category']}\n

@@ -140,6 +140,10 @@ def adjust_string(s):
     if type(s) is not str:
         return s
 
+    # BOM（Byte Order Mark）を除去（全環境で必要）
+    if s.startswith('\ufeff'):
+        s = s[1:]
+
     # OSがWindowsの場合、Unicode正規化と、cp932（Windows用の文字コード）で表現できない文字を除去
     if sys.platform.startswith("win"):
         s = unicodedata.normalize('NFC', s)
